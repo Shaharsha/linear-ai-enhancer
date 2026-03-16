@@ -4,7 +4,7 @@ One-click AI enhancement for [Linear](https://linear.app) issue tickets — turn
 
 ![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-4285F4?logo=googlechrome&logoColor=white)
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-34A853)
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 <!-- TODO: Add a hero GIF/screenshot here showing the extension in action -->
@@ -23,7 +23,7 @@ One-click AI enhancement for [Linear](https://linear.app) issue tickets — turn
    git clone https://github.com/Shaharsha/linear-ai-enhancer.git
    ```
 2. Go to `chrome://extensions/` → enable **Developer mode** → click **Load unpacked** → select the folder
-3. Click the extension icon → pick a provider → paste your API key → **Save**
+3. Click the extension icon → enter API keys for one or more providers → choose a model → **Save**
 
 ## Usage
 
@@ -40,8 +40,9 @@ The extension reads the current title, description text, and any attached images
 ## Features
 
 - **Structured output** — Problem → Expected Behavior → Acceptance Criteria → Visual Context
-- **Image-aware** — extracts screenshots, sends them to the LLM, preserves them in the output
-- **Multi-language** — auto-detects and responds in the input language
+- **Rich text rendering** — outputs formatted headings, bold text, and bullet lists directly in Linear's editor
+- **Image-aware** — extracts attached images, sends them to the LLM, preserves them in the output
+- **Multi-language** — matches the dominant language of the input
 - **Multi-provider** — Gemini, Claude, or GPT with your own API key
 - **Zero dependencies** — vanilla JS, no build step
 
@@ -51,6 +52,7 @@ The extension reads the current title, description text, and any attached images
 |----------|-------|----------|
 | Google Gemini | `gemini-3-flash-preview` | `thinkingLevel: "medium"` |
 | Anthropic Claude | `claude-haiku-4-5-20251001` | `budget_tokens: 10000` |
+| Anthropic Claude | `claude-sonnet-4-6` | `adaptive` + `effort: "medium"` |
 | OpenAI GPT | `gpt-5-mini` | `reasoning_effort: "medium"` |
 
 ## Getting API Keys
@@ -100,7 +102,7 @@ background.js (service worker)
 ├─ Parses structured response
 └─ Executes editor updates in MAIN world
 
-popup.html/js — provider selection & API key management
+popup.html/js — model selection & API key management
 ```
 
 </details>
@@ -114,7 +116,7 @@ linear-ai-enhancer/
 ├── background.js     # Service worker — LLM calls, image processing, prompts
 ├── content.js        # Content script — DOM injection, extraction, editor updates
 ├── popup.html        # Settings popup markup
-├── popup.js          # Settings popup logic (provider + API key)
+├── popup.js          # Settings popup logic (model selection + API keys)
 ├── popup.css         # Settings popup styling
 ├── styles.css        # Injected button styling
 └── icons/            # Extension icons (16, 48, 128px)

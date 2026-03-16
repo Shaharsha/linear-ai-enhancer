@@ -14,7 +14,7 @@ One-click AI enhancement for [Linear](https://linear.app) issue tickets — turn
 | | Before | After |
 |--|--------|-------|
 | **Title** | save button doesn't work | Fix save button not persisting changes on settings page |
-| **Description** | clicking save on settings does nothing, no error | **Problem:** Clicking the save button on the settings page does not persist changes. No error message is shown.<br>**Expected Behavior:** Clicking save persists all changes and shows a confirmation message.<br>**Acceptance Criteria:** 5 testable conditions covering validation, loading state, and error handling. |
+| **Description** | clicking save on settings does nothing, no error | **Problem:** Clicking the save button on the settings page does not persist changes. No error message is shown.<br><br>**Expected Behavior:** Clicking save persists all changes and shows a confirmation message.<br><br>**Acceptance Criteria:** 5 testable conditions covering validation, loading state, and error handling. |
 
 ## Installation
 

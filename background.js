@@ -1,6 +1,6 @@
 // === Prompts ===
 
-const TITLE_PROMPT = `You generate concise titles for software issue tickets from descriptions and screenshots.
+const TITLE_PROMPT = `You generate concise titles for software issue tickets from descriptions and images.
 
 Rules:
 - ALWAYS generate a title. Never refuse, never ask for more info, never explain.
@@ -33,12 +33,12 @@ const CONTENT_PROMPT = `You enhance software issue ticket descriptions into a st
 Rules:
 - ALWAYS produce enhanced content. Never refuse, never ask for more info.
 - Preserve ALL original information. Never remove details.
-- Describe any screenshots/images in text within the relevant section — the AI coding agent may not receive the images directly.
+- Describe any attached images in text within the relevant section — the AI coding agent may not receive the images directly.
+- When images are provided, reference them in the Problem and Expected Behavior sections (e.g. "as shown in Image 1"). This is important because AI coding agents cannot see images — they rely on textual references to understand which image illustrates which issue.
 - Keep acceptance criteria specific and testable (pass/fail checkable).
 - Include 3-7 acceptance criteria. Cover edge cases, not just happy paths.
 - Be specific about WHAT and WHY, not about HOW to implement.
-- In Problem/Expected Behavior sections, reference screenshots when relevant (e.g. "as shown in Screenshot 1").
-- NEVER include a "Visual Context" section unless the input contains actual images/screenshots. If there are no images, output only Problem, Expected Behavior, and Acceptance Criteria.
+- NEVER include a "Visual Context" section unless the input contains actual images. If there are no images, output only Problem, Expected Behavior, and Acceptance Criteria.
 - When images ARE provided, you MUST include [IMAGE_1], [IMAGE_2], etc. placeholders on their own line in the Visual Context section. Each image MUST have its own placeholder. Without these placeholders, images will be lost.
 - Match the dominant language of the original description. If the input is mostly English with some non-English terms, write in English (and vice versa).
 - Output ONLY the enhanced description. No meta-commentary, no "Here is the enhanced version".
@@ -57,22 +57,22 @@ Output format — use these exact markdown headers:
 - Edge case or error handling condition
 
 ## Visual Context
-Only include this section if screenshots were provided.
+Only include this section if images were provided.
 - If there are multiple images, describe each one separately with a clear label.
 - Use the placeholder [IMAGE_1], [IMAGE_2], etc. on its own line to indicate where each original image should be placed (in order they appeared in the description).
 - Reproduce any visible text EXACTLY as it appears (keep original language, do NOT translate).
 - Describe UI elements, layout, colors, icons, states, error messages, data values verbatim.
-Skip this section entirely if no screenshots.
+Skip this section entirely if no images.
 
 Example with 2 images:
 ## Visual Context
 
-### Screenshot 1
+### Image 1
 Shows a login form with email and password fields. Error message "שם משתמש או סיסמה שגויים" appears in red below the form.
 
 [IMAGE_1]
 
-### Screenshot 2
+### Image 2
 Shows the network tab with a 401 response from /api/auth/login endpoint.
 
 [IMAGE_2]
@@ -126,9 +126,9 @@ const BOTH_PROMPT = `You generate BOTH a concise title AND an enhanced descripti
 Rules:
 - ALWAYS produce both title and content. Never refuse, never ask for more info.
 - Preserve ALL original information in the description.
-- Describe any screenshots/images in text — the AI coding agent may not receive images directly.
-- In Problem/Expected Behavior sections, reference screenshots when relevant (e.g. "as shown in Screenshot 1").
-- NEVER include a "Visual Context" section unless the input contains actual images/screenshots. If there are no images, output only Problem, Expected Behavior, and Acceptance Criteria.
+- Describe any attached images in text — the AI coding agent may not receive images directly.
+- When images are provided, reference them in the Problem and Expected Behavior sections (e.g. "as shown in Image 1"). This is important because AI coding agents cannot see images — they rely on textual references to understand which image illustrates which issue.
+- NEVER include a "Visual Context" section unless the input contains actual images. If there are no images, output only Problem, Expected Behavior, and Acceptance Criteria.
 - When images ARE provided, you MUST include [IMAGE_1], [IMAGE_2], etc. placeholders on their own line in the Visual Context section. Each image MUST have its own placeholder. Without these placeholders, images will be lost.
 - Match the dominant language of the original. If the input is mostly English with some non-English terms, write in English (and vice versa).
 - Use the EXACT output format below with the TITLE: prefix and ---CONTENT--- delimiter.
@@ -148,7 +148,7 @@ TITLE: verb-first, under 80 chars, specific
 - Edge case
 
 ## Visual Context
-Only if screenshots were provided. Describe each image separately with labels. Use [IMAGE_1], [IMAGE_2] etc. placeholders on their own line to indicate where each original image belongs. Reproduce all visible text verbatim in its original language (do NOT translate). Describe UI elements, layout, icons, data values. Skip entirely if none.
+Only if images were provided. Describe each image separately with labels. Use [IMAGE_1], [IMAGE_2] etc. placeholders on their own line to indicate where each original image belongs. Reproduce all visible text verbatim in its original language (do NOT translate). Describe UI elements, layout, icons, data values. Skip entirely if none.
 
 Example input: users can't upload files bigger than 5MB, it just spins forever
 Example output:
@@ -340,32 +340,117 @@ async function executeInMainWorld(tabId, { newText }) {
           const { schema } = state;
           const imageType = schema.nodes.image;
 
+          // Save existing images
           const savedImages = [];
           state.doc.descendants((node) => {
             if (node.type.name === 'image') savedImages.push(JSON.parse(JSON.stringify(node.attrs)));
           });
 
+          // Parse inline marks: **bold** and _italic_
+          function parseInline(str) {
+            const parts = [];
+            const re = /(\*\*(.+?)\*\*|__(.+?)__|_(.+?)_|\*(.+?)\*)/g;
+            let last = 0;
+            let m;
+            while ((m = re.exec(str)) !== null) {
+              if (m.index > last) parts.push(schema.text(str.slice(last, m.index)));
+              const boldText = m[2] || m[3];
+              const italicText = m[4] || m[5];
+              if (boldText && schema.marks.strong) {
+                parts.push(schema.text(boldText, [schema.marks.strong.create()]));
+              } else if (boldText && schema.marks.bold) {
+                parts.push(schema.text(boldText, [schema.marks.bold.create()]));
+              } else if (italicText && schema.marks.em) {
+                parts.push(schema.text(italicText, [schema.marks.em.create()]));
+              } else {
+                parts.push(schema.text(m[0]));
+              }
+              last = m.index + m[0].length;
+            }
+            if (last < str.length) parts.push(schema.text(str.slice(last)));
+            return parts.length > 0 ? parts : [schema.text(str)];
+          }
+
+          function makeParagraph(str) {
+            const content = str ? parseInline(str) : [];
+            return schema.nodes.paragraph.create(null, content.length > 0 ? content : null);
+          }
+
+          const lines = text.split('\n');
           const newNodes = [];
           const usedImages = new Set();
+          let i = 0;
 
-          for (const line of text.split('\n')) {
-            const imgMatch = line.trim().match(/^\[IMAGE_(\d+)\]$/);
+          while (i < lines.length) {
+            const line = lines[i];
+            const trimmed = line.trim();
+
+            // [IMAGE_N] placeholder
+            const imgMatch = trimmed.match(/^\[IMAGE_(\d+)\]$/);
             if (imgMatch && imageType) {
               const idx = parseInt(imgMatch[1]) - 1;
               if (idx >= 0 && idx < savedImages.length) {
                 try { newNodes.push(imageType.create(savedImages[idx])); usedImages.add(idx); } catch {}
               }
-            } else if (line.trim()) {
-              newNodes.push(schema.nodes.paragraph.create(null, schema.text(line)));
-            } else {
-              newNodes.push(schema.nodes.paragraph.create());
+              i++;
+              continue;
             }
+
+            // ## Heading
+            const headingMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
+            if (headingMatch && schema.nodes.heading) {
+              const level = headingMatch[1].length;
+              const content = parseInline(headingMatch[2]);
+              try {
+                newNodes.push(schema.nodes.heading.create({ level }, content));
+              } catch {
+                newNodes.push(makeParagraph(headingMatch[2]));
+              }
+              i++;
+              continue;
+            }
+
+            // Consecutive bullet list items: - item
+            if (trimmed.match(/^[-*]\s+/)) {
+              const items = [];
+              while (i < lines.length && lines[i].trim().match(/^[-*]\s+/)) {
+                const itemText = lines[i].trim().replace(/^[-*]\s+/, '');
+                const itemContent = makeParagraph(itemText);
+                if (schema.nodes.list_item) {
+                  try { items.push(schema.nodes.list_item.create(null, itemContent)); } catch {
+                    items.push(itemContent);
+                  }
+                } else {
+                  newNodes.push(makeParagraph('• ' + itemText));
+                }
+                i++;
+              }
+              if (items.length > 0 && schema.nodes.bullet_list) {
+                try { newNodes.push(schema.nodes.bullet_list.create(null, items)); } catch {
+                  items.forEach(item => newNodes.push(item));
+                }
+              } else if (items.length > 0) {
+                items.forEach(item => newNodes.push(item));
+              }
+              continue;
+            }
+
+            // Empty line → empty paragraph
+            if (!trimmed) {
+              newNodes.push(makeParagraph(''));
+              i++;
+              continue;
+            }
+
+            // Regular paragraph
+            newNodes.push(makeParagraph(trimmed));
+            i++;
           }
 
           // Append unplaced images at the end
           const unplaced = savedImages.filter((_, i) => !usedImages.has(i));
           if (imageType && unplaced.length > 0) {
-            newNodes.push(schema.nodes.paragraph.create());
+            newNodes.push(makeParagraph(''));
             for (const attrs of unplaced) {
               try { newNodes.push(imageType.create(attrs)); } catch {}
             }

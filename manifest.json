@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Linear AI Enhancer",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Enhance Linear issue titles and descriptions with AI — optimized for Claude Code workflows",
   "permissions": ["storage", "scripting", "activeTab"],
   "host_permissions": [

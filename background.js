@@ -1,4 +1,4 @@
-// === Prompts (optimized for Claude Haiku 4.5 — budget model needs explicit examples) ===
+// === Prompts ===
 
 const TITLE_PROMPT = `You generate concise titles for software issue tickets from descriptions and screenshots.
 
@@ -39,6 +39,7 @@ Rules:
 - Be specific about WHAT and WHY, not about HOW to implement.
 - In Problem/Expected Behavior sections, reference screenshots when relevant (e.g. "as shown in Screenshot 1").
 - NEVER include a "Visual Context" section unless the input contains actual images/screenshots. If there are no images, output only Problem, Expected Behavior, and Acceptance Criteria.
+- When images ARE provided, you MUST include [IMAGE_1], [IMAGE_2], etc. placeholders on their own line in the Visual Context section. Each image MUST have its own placeholder. Without these placeholders, images will be lost.
 - Match the dominant language of the original description. If the input is mostly English with some non-English terms, write in English (and vice versa).
 - Output ONLY the enhanced description. No meta-commentary, no "Here is the enhanced version".
 
@@ -128,6 +129,7 @@ Rules:
 - Describe any screenshots/images in text — the AI coding agent may not receive images directly.
 - In Problem/Expected Behavior sections, reference screenshots when relevant (e.g. "as shown in Screenshot 1").
 - NEVER include a "Visual Context" section unless the input contains actual images/screenshots. If there are no images, output only Problem, Expected Behavior, and Acceptance Criteria.
+- When images ARE provided, you MUST include [IMAGE_1], [IMAGE_2], etc. placeholders on their own line in the Visual Context section. Each image MUST have its own placeholder. Without these placeholders, images will be lost.
 - Match the dominant language of the original. If the input is mostly English with some non-English terms, write in English (and vice versa).
 - Use the EXACT output format below with the TITLE: prefix and ---CONTENT--- delimiter.
 
@@ -199,6 +201,19 @@ The export button downloads a CSV file containing all the report data currently 
 - File name includes the report month for easy identification
 - Large reports (1000+ rows) export without timeout or truncation`;
 
+// === Model Configuration ===
+
+const MODELS = {
+  gemini:          { provider: 'gemini' },
+  'claude-haiku':  { provider: 'claude', apiModel: 'claude-haiku-4-5-20251001', thinking: { type: 'enabled', budget_tokens: 10000 }, maxTokensPad: 12000 },
+  'claude-sonnet': { provider: 'claude', apiModel: 'claude-sonnet-4-6', thinking: { type: 'adaptive' }, effort: 'medium', maxTokensPad: 0 },
+  gpt:             { provider: 'gpt' },
+};
+
+function maxTokens(action) {
+  return action === 'title' ? 1000 : 16000;
+}
+
 // === Message Handling ===
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -216,48 +231,86 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-async function executeInMainWorld(tabId, { newText }) {
-  console.log('[TitleGen BG] executeInMainWorld called, tabId:', tabId, 'textLen:', newText?.length);
+// === Core Logic ===
+
+async function handleEnhance({ action, segments, currentTitle }) {
+  const data = await chrome.storage.sync.get(['model', 'provider', 'keys']);
+  const model = data.model || data.provider || 'gemini';
+  const config = MODELS[model];
+  if (!config) return { error: `Unknown model: ${model}` };
+
+  const apiKey = (data.keys || {})[config.provider];
+  if (!apiKey) return { error: 'No API key configured. Click the extension icon to set one up.' };
+
+  const resolved = await resolveSegments(segments, currentTitle);
+  if (resolved.length === 0) return { error: 'No content to generate from.' };
+
+  const prompt = action === 'both' ? BOTH_PROMPT : action === 'content' ? CONTENT_PROMPT : TITLE_PROMPT;
+
   try {
-    const results = await chrome.scripting.executeScript({
+    const CALLERS = { gemini: callGemini, claude: callClaude, gpt: callGPT };
+    const raw = await CALLERS[config.provider](apiKey, prompt, resolved, action, config);
+
+    if (action === 'both') return parseBothResult(raw);
+    return action === 'content' ? { content: raw } : { title: raw };
+  } catch (e) {
+    return { error: e.message || 'API call failed' };
+  }
+}
+
+async function resolveSegments(segments, currentTitle) {
+  const resolved = [];
+  if (currentTitle) resolved.push({ type: 'text', value: `Current title: ${currentTitle}\n\n` });
+
+  for (const seg of (segments || [])) {
+    if (seg.type === 'text') {
+      resolved.push({ type: 'text', value: seg.value.substring(0, 8000) });
+    } else if (seg.type === 'image') {
+      const img = await fetchImageAsBase64(seg.url).catch(() => null);
+      if (img) resolved.push({ type: 'image', ...img });
+    }
+  }
+  return resolved;
+}
+
+function parseBothResult(raw) {
+  const title = raw.match(/^TITLE:\s*(.+)/m)?.[1]?.trim() || null;
+  const content = raw.split(/---CONTENT---/)[1]?.trim() || null;
+  if (!title && !content) return { error: 'Could not parse response' };
+  return { title, content };
+}
+
+// === ProseMirror Injection ===
+
+async function executeInMainWorld(tabId, { newText }) {
+  try {
+    await chrome.scripting.executeScript({
       target: { tabId },
       world: 'MAIN',
       func: (text) => {
         try {
           const el = document.querySelector('[aria-label="Issue description"]');
           const view = el?.pmView;
-          if (!view) { console.error('[TitleGen] No pmView found'); return; }
+          if (!view) return;
 
           const { state } = view;
           const { schema } = state;
           const imageType = schema.nodes.image;
 
-          // Save existing image node attrs
           const savedImages = [];
           state.doc.descendants((node) => {
-            if (node.type.name === 'image') {
-              savedImages.push(JSON.parse(JSON.stringify(node.attrs)));
-            }
+            if (node.type.name === 'image') savedImages.push(JSON.parse(JSON.stringify(node.attrs)));
           });
-          console.log('[TitleGen] Saved ' + savedImages.length + ' images');
 
-          // Build new document: text paragraphs with [IMAGE_N] placeholders replaced by actual images
           const newNodes = [];
-          const lines = text.split('\n');
-          let usedImageIndices = new Set();
+          const usedImages = new Set();
 
-          for (const line of lines) {
-            // Check for [IMAGE_N] placeholder
+          for (const line of text.split('\n')) {
             const imgMatch = line.trim().match(/^\[IMAGE_(\d+)\]$/);
             if (imgMatch && imageType) {
-              const imgIndex = parseInt(imgMatch[1]) - 1; // 1-based to 0-based
-              if (imgIndex >= 0 && imgIndex < savedImages.length) {
-                try {
-                  newNodes.push(imageType.create(savedImages[imgIndex]));
-                  usedImageIndices.add(imgIndex);
-                } catch (e) {
-                  console.warn('[TitleGen] Failed to create image node:', e);
-                }
+              const idx = parseInt(imgMatch[1]) - 1;
+              if (idx >= 0 && idx < savedImages.length) {
+                try { newNodes.push(imageType.create(savedImages[idx])); usedImages.add(idx); } catch {}
               }
             } else if (line.trim()) {
               newNodes.push(schema.nodes.paragraph.create(null, schema.text(line)));
@@ -266,115 +319,28 @@ async function executeInMainWorld(tabId, { newText }) {
             }
           }
 
-          // Append any remaining images that weren't placed via placeholders
-          if (imageType && savedImages.length > 0) {
-            const unplaced = savedImages.filter((_, i) => !usedImageIndices.has(i));
-            if (unplaced.length > 0) {
-              newNodes.push(schema.nodes.paragraph.create());
-              for (const attrs of unplaced) {
-                try {
-                  newNodes.push(imageType.create(attrs));
-                } catch (e) {
-                  console.warn('[TitleGen] Failed to create image node:', e);
-                }
-              }
+          // Append unplaced images at the end
+          const unplaced = savedImages.filter((_, i) => !usedImages.has(i));
+          if (imageType && unplaced.length > 0) {
+            newNodes.push(schema.nodes.paragraph.create());
+            for (const attrs of unplaced) {
+              try { newNodes.push(imageType.create(attrs)); } catch {}
             }
           }
 
-          // Replace entire document via one transaction
           const tr = state.tr;
           tr.replaceWith(0, state.doc.content.size, newNodes);
           view.dispatch(tr);
-          console.log('[TitleGen] Replaced with ' + newNodes.length + ' nodes (' + savedImages.length + ' images preserved)');
         } catch (e) {
-          console.error('[TitleGen] MAIN world script error:', e);
+          console.error('[LinearAI] ProseMirror injection error:', e);
         }
       },
       args: [newText],
     });
-    console.log('[TitleGen BG] executeScript results:', results);
     return { success: true };
   } catch (e) {
-    console.error('[TitleGen BG] executeScript failed:', e.message, e.stack);
     return { error: e.message };
   }
-}
-
-async function handleEnhance({ action, segments, currentTitle }) {
-  console.log(`[TitleGen BG] ${action} request:`, { segmentCount: segments?.length, currentTitle });
-
-  const data = await chrome.storage.sync.get(['provider', 'keys']);
-  const provider = data.provider || 'gemini';
-  const apiKey = (data.keys || {})[provider];
-
-  if (!apiKey) {
-    return { error: 'No API key configured. Click the extension icon to set one up.' };
-  }
-
-  // Resolve segments: fetch images as base64, preserve order
-  const resolvedSegments = [];
-  if (currentTitle) {
-    resolvedSegments.push({ type: 'text', value: `Current title: ${currentTitle}\n\n` });
-  }
-
-  for (const seg of (segments || [])) {
-    if (seg.type === 'text') {
-      resolvedSegments.push({ type: 'text', value: seg.value.substring(0, 8000) });
-    } else if (seg.type === 'image') {
-      try {
-        console.log('[TitleGen BG] Fetching image:', seg.url.substring(0, 80));
-        const img = await fetchImageAsBase64(seg.url);
-        if (img) {
-          console.log('[TitleGen BG] Image fetched:', img.mimeType, Math.round(img.base64.length / 1024) + 'KB');
-          resolvedSegments.push({ type: 'image', ...img });
-        }
-      } catch (e) {
-        console.error('[TitleGen BG] Image fetch failed:', e.message);
-      }
-    }
-  }
-
-  if (resolvedSegments.length === 0) {
-    return { error: 'No content to generate from.' };
-  }
-
-  // Select prompt based on action
-  const prompt = action === 'both' ? BOTH_PROMPT : action === 'content' ? CONTENT_PROMPT : TITLE_PROMPT;
-
-  try {
-    console.log(`[TitleGen BG] Calling ${provider} for ${action}`);
-    let rawResult;
-    switch (provider) {
-      case 'gemini': rawResult = await callGemini(apiKey, prompt, resolvedSegments, action); break;
-      case 'claude': rawResult = await callClaude(apiKey, prompt, resolvedSegments, action); break;
-      case 'gpt': rawResult = await callGPT(apiKey, prompt, resolvedSegments, action); break;
-      default: return { error: `Unknown provider: ${provider}` };
-    }
-
-    if (action === 'both') {
-      return parseBothResult(rawResult);
-    } else if (action === 'content') {
-      return { content: rawResult };
-    } else {
-      return { title: rawResult };
-    }
-  } catch (e) {
-    console.error(`[TitleGen BG] ${action} failed:`, e.message);
-    return { error: e.message || 'API call failed' };
-  }
-}
-
-function parseBothResult(raw) {
-  const titleMatch = raw.match(/^TITLE:\s*(.+)/m);
-  const contentSplit = raw.split(/---CONTENT---/);
-
-  const title = titleMatch ? titleMatch[1].trim() : null;
-  const content = contentSplit.length > 1 ? contentSplit[1].trim() : null;
-
-  if (!title && !content) {
-    return { error: 'Could not parse response' };
-  }
-  return { title, content };
 }
 
 // === Image Handling ===
@@ -389,141 +355,95 @@ async function fetchImageAsBase64(url) {
 
   try {
     const bitmap = await createImageBitmap(blob);
-    const { width, height } = bitmap;
-    const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(width, height));
-    const newW = Math.round(width * scale);
-    const newH = Math.round(height * scale);
-
-    const canvas = new OffscreenCanvas(newW, newH);
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(bitmap, 0, 0, newW, newH);
+    const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(bitmap.width, bitmap.height));
+    const canvas = new OffscreenCanvas(Math.round(bitmap.width * scale), Math.round(bitmap.height * scale));
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     bitmap.close();
 
     let quality = 0.85;
-    let outputBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
-    while (outputBlob.size > MAX_IMAGE_BYTES && quality > 0.3) {
+    let out = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+    while (out.size > MAX_IMAGE_BYTES && quality > 0.3) {
       quality -= 0.15;
-      outputBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+      out = await canvas.convertToBlob({ type: 'image/jpeg', quality });
     }
-
-    console.log(`[TitleGen BG] Resized ${width}x${height} → ${newW}x${newH}, q=${quality.toFixed(2)}, ${Math.round(outputBlob.size / 1024)}KB`);
-
-    return { base64: await blobToBase64(outputBlob), mimeType: 'image/jpeg' };
-  } catch (e) {
-    console.warn('[TitleGen BG] Resize failed, sending raw:', e.message);
+    return { base64: await blobToBase64(out), mimeType: 'image/jpeg' };
+  } catch {
     return { base64: await blobToBase64(blob), mimeType: blob.type || 'image/png' };
   }
 }
 
 async function blobToBase64(blob) {
-  const buffer = await blob.arrayBuffer();
-  const bytes = new Uint8Array(buffer);
+  const bytes = new Uint8Array(await blob.arrayBuffer());
   let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
   return btoa(binary);
 }
 
 // === Provider Adapters ===
 
-function buildMaxTokens(action) {
-  return action === 'title' ? 1000 : 16000;
-}
-
-// --- Gemini 3 Flash ---
 async function callGemini(apiKey, systemPrompt, segments, action) {
-  const parts = [];
-  for (const seg of segments) {
-    if (seg.type === 'text') parts.push({ text: seg.value });
-    else if (seg.type === 'image') parts.push({ inlineData: { mimeType: seg.mimeType, data: seg.base64 } });
-  }
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts }],
-        generationConfig: {
-          maxOutputTokens: buildMaxTokens(action),
-          thinkingConfig: { thinkingLevel: 'medium' },
-        },
-      }),
-    }
+  const parts = segments.map(seg =>
+    seg.type === 'text' ? { text: seg.value } : { inlineData: { mimeType: seg.mimeType, data: seg.base64 } }
   );
 
-  const data = await response.json();
-  if (data.error) throw new Error(data.error.message);
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-  if (!text) throw new Error('No text in Gemini response');
-  return text;
+  const data = await postJSON(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`,
+    {
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: 'user', parts }],
+      generationConfig: { maxOutputTokens: maxTokens(action), thinkingConfig: { thinkingLevel: 'medium' } },
+    }
+  );
+  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || throwErr('No text in Gemini response');
 }
 
-// --- Claude Haiku 4.5 ---
-async function callClaude(apiKey, systemPrompt, segments, action) {
-  const content = [];
-  for (const seg of segments) {
-    if (seg.type === 'text') content.push({ type: 'text', text: seg.value });
-    else if (seg.type === 'image') content.push({ type: 'image', source: { type: 'base64', media_type: seg.mimeType, data: seg.base64 } });
-  }
+async function callClaude(apiKey, systemPrompt, segments, action, config) {
+  const content = segments.map(seg =>
+    seg.type === 'text' ? { type: 'text', text: seg.value } : { type: 'image', source: { type: 'base64', media_type: seg.mimeType, data: seg.base64 } }
+  );
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: buildMaxTokens(action) + 12000,
-      system: systemPrompt,
-      thinking: { type: 'enabled', budget_tokens: 10000 },
-      messages: [{ role: 'user', content }],
-    }),
+  const body = {
+    model: config.apiModel,
+    max_tokens: maxTokens(action) + (config.maxTokensPad || 0),
+    system: systemPrompt,
+    thinking: config.thinking,
+    messages: [{ role: 'user', content }],
+  };
+  if (config.effort) body.output_config = { effort: config.effort };
+
+  const data = await postJSON('https://api.anthropic.com/v1/messages', body, {
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true',
   });
-
-  const data = await response.json();
-  if (data.error) throw new Error(data.error.message);
-  // With thinking enabled, response has thinking blocks then text blocks — find the text block
-  const textBlock = data.content?.find(b => b.type === 'text');
-  const text = textBlock?.text?.trim();
-  if (!text) throw new Error('No text in Claude response');
-  return text;
+  return data.content?.find(b => b.type === 'text')?.text?.trim() || throwErr('No text in Claude response');
 }
 
-// --- GPT 5 Mini ---
 async function callGPT(apiKey, systemPrompt, segments, action) {
-  const userContent = [];
-  for (const seg of segments) {
-    if (seg.type === 'text') userContent.push({ type: 'text', text: seg.value });
-    else if (seg.type === 'image') userContent.push({ type: 'image_url', image_url: { url: `data:${seg.mimeType};base64,${seg.base64}` } });
-  }
+  const content = segments.map(seg =>
+    seg.type === 'text' ? { type: 'text', text: seg.value } : { type: 'image_url', image_url: { url: `data:${seg.mimeType};base64,${seg.base64}` } }
+  );
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const data = await postJSON('https://api.openai.com/v1/chat/completions', {
+    model: 'gpt-5-mini',
+    max_completion_tokens: maxTokens(action) + 200,
+    reasoning_effort: 'medium',
+    messages: [{ role: 'developer', content: systemPrompt }, { role: 'user', content }],
+  }, { Authorization: `Bearer ${apiKey}` });
+  return data.choices?.[0]?.message?.content?.trim() || throwErr('No text in GPT response');
+}
+
+// === Utilities ===
+
+async function postJSON(url, body, extraHeaders = {}) {
+  const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: 'gpt-5-mini',
-      max_completion_tokens: buildMaxTokens(action) + 200,
-      reasoning_effort: 'medium',
-      messages: [
-        { role: 'developer', content: systemPrompt },
-        { role: 'user', content: userContent },
-      ],
-    }),
+    headers: { 'Content-Type': 'application/json', ...extraHeaders },
+    body: JSON.stringify(body),
   });
-
   const data = await response.json();
   if (data.error) throw new Error(data.error.message);
-  const text = data.choices?.[0]?.message?.content?.trim();
-  if (!text) throw new Error('No text in GPT response');
-  return text;
+  return data;
 }
+
+function throwErr(msg) { throw new Error(msg); }

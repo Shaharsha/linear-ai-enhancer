@@ -1,25 +1,47 @@
 # Linear AI Enhancer
 
-A Chrome extension that adds AI-powered buttons directly into [Linear](https://linear.app) to generate and enhance issue titles and descriptions — structured for AI coding agent workflows.
+One-click AI enhancement for [Linear](https://linear.app) issue tickets — turn rough notes into structured, agent-ready issues.
 
 ![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-4285F4?logo=googlechrome&logoColor=white)
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-34A853)
 ![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-## Why
+<!-- TODO: Add a hero GIF/screenshot here showing the extension in action -->
 
-Writing good issue tickets takes time. Vague titles and unstructured descriptions slow down development — especially when AI coding agents like Claude Code need clear, self-contained context to work effectively.
+## Before & After
 
-Linear AI Enhancer solves this by turning rough notes and screenshots into structured, actionable tickets in one click, right inside Linear.
+| Before | After |
+|--------|-------|
+| **Title:** "fix the bug" | **Title:** "Fix login redirect loop causing 403 on SSO callback" |
+| **Description:** "auth is broken when you log in with SSO, sometimes get error" | **Description:** Structured issue with Problem, Expected Behavior, 5 Acceptance Criteria, and Visual Context sections |
+
+## Installation
+
+1. Clone the repo and load it in Chrome:
+   ```sh
+   git clone https://github.com/Shaharsha/linear-ai-enhancer.git
+   ```
+2. Go to `chrome://extensions/` → enable **Developer mode** → click **Load unpacked** → select the folder
+3. Click the extension icon → pick a provider → paste your API key → **Save**
+
+## Usage
+
+Open any issue on [linear.app](https://linear.app). Three buttons appear:
+
+| Button | Action |
+|--------|--------|
+| ✦ Sparkle (next to title) | Generate a concise, verb-first title |
+| ✧ Wand (top-right of description) | Enhance description into structured format |
+| ✦✦ Double sparkle (header row) | Both at once |
 
 ## Features
 
-- **Three enhancement modes** — generate a title, enhance a description, or do both at once
-- **Structured output** — descriptions follow a consistent Problem → Expected Behavior → Acceptance Criteria → Visual Context format
-- **Image-aware** — extracts images from issues, sends them to the LLM for analysis, and preserves them in the enhanced output
-- **Multi-language** — auto-detects input language (English, Hebrew, etc.) and responds in kind
-- **Multi-provider** — choose between Gemini, Claude, or GPT with your own API key
-- **Zero dependencies** — pure vanilla JavaScript, no build step, no external libraries
+- **Structured output** — Problem → Expected Behavior → Acceptance Criteria → Visual Context
+- **Image-aware** — extracts screenshots, sends them to the LLM, preserves them in the output
+- **Multi-language** — auto-detects and responds in the input language
+- **Multi-provider** — Gemini, Claude, or GPT with your own API key
+- **Zero dependencies** — vanilla JS, no build step
 
 ## Supported Providers
 
@@ -29,34 +51,20 @@ Linear AI Enhancer solves this by turning rough notes and screenshots into struc
 | Anthropic Claude | `claude-haiku-4-5-20251001` | `budget_tokens: 10000` |
 | OpenAI GPT | `gpt-5-mini` | `reasoning_effort: "medium"` |
 
-## Installation
+## Getting API Keys
 
-1. Clone the repository:
-   ```sh
-   git clone https://github.com/your-username/linear-ai-enhancer.git
-   ```
-2. Open `chrome://extensions/` in Chrome
-3. Enable **Developer mode** (top-right toggle)
-4. Click **Load unpacked** and select the `linear-ai-enhancer` directory
-5. Click the extension icon in the toolbar, select a provider, enter your API key, and hit **Save**
+| Provider | Get a key |
+|----------|-----------|
+| Google Gemini | [Google AI Studio](https://aistudio.google.com/api-keys) |
+| Anthropic Claude | [Claude Platform](https://platform.claude.com/settings/keys) |
+| OpenAI GPT | [OpenAI Platform](https://platform.openai.com/api-keys) |
 
-## Usage
+Keys are stored per-provider in Chrome's encrypted sync storage — switch providers without re-entering them.
 
-Navigate to any issue on [linear.app](https://linear.app). Three buttons appear automatically:
+<details>
+<summary><strong>Output format</strong></summary>
 
-| Button | Location | Action |
-|--------|----------|--------|
-| ✦ Sparkle | Next to issue title | Generate a concise, verb-first title |
-| ✧ Wand | Top-right of description | Enhance description into structured format |
-| ✦✦ Double sparkle | Header button row | Generate both title and structured description |
-
-Click any button — a spinner shows while processing, then a checkmark confirms success. The result is applied directly to Linear's editor.
-
-### Output format
-
-Enhanced descriptions follow this structure:
-
-```
+```markdown
 ## Problem
 What is wrong or needed, and why it matters.
 
@@ -71,37 +79,32 @@ What should happen after implementation.
 (Only if screenshots are present — describes each image and preserves it inline)
 ```
 
-## How It Works
+</details>
+
+<details>
+<summary><strong>How it works</strong></summary>
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  Linear (linear.app)                                │
-│                                                     │
-│  content.js                                         │
-│  ├─ Injects buttons via MutationObserver            │
-│  ├─ Extracts title, description text, and images    │
-│  └─ Applies results to editor                       │
-│        │                                            │
-│        │  chrome.runtime.sendMessage                │
-│        ▼                                            │
-│  background.js (service worker)                     │
-│  ├─ Fetches & resizes images (max 1568px, ≤4MB)     │
-│  ├─ Selects prompt based on action                  │
-│  ├─ Calls LLM API (Gemini / Claude / GPT)           │
-│  ├─ Parses structured response                      │
-│  └─ Executes ProseMirror updates in MAIN world      │
-│                                                     │
-│  popup.html/js                                      │
-│  └─ Provider selection & API key management         │
-└─────────────────────────────────────────────────────┘
+content.js (runs on linear.app)
+├─ Injects buttons via MutationObserver
+├─ Extracts title, description text, and images
+└─ Applies results to Linear's ProseMirror editor
+       │
+       │  chrome.runtime.sendMessage
+       ▼
+background.js (service worker)
+├─ Fetches & resizes images (max 1568px, ≤4MB)
+├─ Calls LLM API (Gemini / Claude / GPT)
+├─ Parses structured response
+└─ Executes editor updates in MAIN world
+
+popup.html/js — provider selection & API key management
 ```
 
-- **Content script** runs on `linear.app`, watching the DOM for issue title/description elements and injecting action buttons
-- **Service worker** handles all API calls, image processing, and prompt orchestration — keeping CSP-sensitive logic out of the page context
-- **MAIN world execution** uses `chrome.scripting.executeScript` to interact with Linear's ProseMirror editor directly, preserving images and rich formatting
-- **Image pipeline** automatically resizes (max 1568×1568px) and compresses (iterative JPEG quality reduction down to 4MB) before sending to LLMs
+</details>
 
-## Project Structure
+<details>
+<summary><strong>Project structure</strong></summary>
 
 ```
 linear-ai-enhancer/
@@ -115,18 +118,10 @@ linear-ai-enhancer/
 └── icons/            # Extension icons (16, 48, 128px)
 ```
 
-## Configuration
+</details>
 
-All settings are stored in Chrome's encrypted sync storage — no config files or environment variables needed.
-
-| Setting | Description |
-|---------|-------------|
-| Provider | Gemini, Claude, or GPT |
-| API Key | Your key for the selected provider (stored per-provider) |
-
-API keys are persisted via `chrome.storage.sync` and travel with your Chrome profile across devices.
-
-## Permissions
+<details>
+<summary><strong>Permissions</strong></summary>
 
 | Permission | Why |
 |------------|-----|
@@ -139,17 +134,15 @@ API keys are persisted via `chrome.storage.sync` and travel with your Chrome pro
 | `https://api.anthropic.com/*` | Claude API |
 | `https://api.openai.com/*` | GPT API |
 
-## Getting API Keys
+</details>
 
-You need an API key from whichever provider you choose:
+## Privacy
 
-| Provider | Where to get a key |
-|----------|--------------------|
-| Google Gemini | [Google AI Studio](https://aistudio.google.com/api-keys) |
-| Anthropic Claude | [Claude Platform](https://platform.claude.com/settings/keys) |
-| OpenAI GPT | [OpenAI Platform](https://platform.openai.com/api-keys) |
+No backend, no analytics, no data collection. Your issue content is sent directly from your browser to the LLM provider you choose. API keys are stored locally in Chrome's encrypted storage.
 
-Once you have a key, click the extension icon in Chrome's toolbar, select your provider from the dropdown, paste your key, and click **Save**. Keys are stored per-provider — you can switch between providers without re-entering them.
+## Contributing
+
+PRs welcome. Please open an issue first to discuss what you'd like to change.
 
 ## License
 

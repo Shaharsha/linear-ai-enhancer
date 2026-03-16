@@ -247,12 +247,19 @@ async function handleEnhance({ action, segments, currentTitle }) {
 
   const prompt = action === 'both' ? BOTH_PROMPT : action === 'content' ? CONTENT_PROMPT : TITLE_PROMPT;
 
+  const imageCount = resolved.filter(s => s.type === 'image').length;
+
   try {
     const CALLERS = { gemini: callGemini, claude: callClaude, gpt: callGPT };
     const raw = await CALLERS[config.provider](apiKey, prompt, resolved, action, config);
 
-    if (action === 'both') return parseBothResult(raw);
-    return action === 'content' ? { content: raw } : { title: raw };
+    if (action === 'both') {
+      const result = parseBothResult(raw);
+      if (result.content) result.content = ensureImagePlaceholders(result.content, imageCount);
+      return result;
+    }
+    if (action === 'content') return { content: ensureImagePlaceholders(raw, imageCount) };
+    return { title: raw };
   } catch (e) {
     return { error: e.message || 'API call failed' };
   }
@@ -271,6 +278,42 @@ async function resolveSegments(segments, currentTitle) {
     }
   }
   return resolved;
+}
+
+function ensureImagePlaceholders(text, imageCount) {
+  if (imageCount === 0) return text;
+
+  // Count how many [IMAGE_N] placeholders already exist
+  const existing = new Set();
+  for (const m of text.matchAll(/\[IMAGE_(\d+)\]/g)) existing.add(parseInt(m[1]));
+
+  // All placeholders present — nothing to do
+  if (existing.size >= imageCount) return text;
+
+  // Build missing placeholders
+  const missing = [];
+  for (let i = 1; i <= imageCount; i++) {
+    if (!existing.has(i)) missing.push(`\n[IMAGE_${i}]`);
+  }
+
+  // Insert at end of Visual Context section if it exists, otherwise append at end
+  const vcHeader = /^## Visual Context$/m;
+  const nextSection = /^## /gm;
+
+  if (vcHeader.test(text)) {
+    // Find the next ## header after Visual Context
+    const vcStart = text.match(vcHeader).index;
+    nextSection.lastIndex = vcStart + 1;
+    let insertAt = text.length;
+    let match;
+    while ((match = nextSection.exec(text)) !== null) {
+      if (match.index > vcStart + 20) { insertAt = match.index - 1; break; }
+    }
+    return text.slice(0, insertAt) + '\n' + missing.join('\n') + '\n' + text.slice(insertAt);
+  }
+
+  // No Visual Context section — append at end
+  return text + '\n' + missing.join('\n');
 }
 
 function parseBothResult(raw) {

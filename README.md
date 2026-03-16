@@ -11,10 +11,10 @@ One-click AI enhancement for [Linear](https://linear.app) issue tickets — turn
 
 ## Before & After
 
-| Before | After |
-|--------|-------|
-| **Title:** "fix the bug" | **Title:** "Fix login redirect loop causing 403 on SSO callback" |
-| **Description:** "auth is broken when you log in with SSO, sometimes get error" | **Description:** Structured issue with Problem, Expected Behavior, 5 Acceptance Criteria, and Visual Context sections |
+| | Before | After |
+|--|--------|-------|
+| **Title** | "fix the bug" | Fix login redirect loop causing 403 on SSO callback |
+| **Description** | "auth is broken when you log in with SSO, sometimes get error" | **Problem:** SSO login triggers a redirect loop, returning a 403 on the callback endpoint. Users cannot sign in. **Expected Behavior:** SSO completes in a single redirect and lands on the dashboard. **Acceptance Criteria:** 5 testable conditions covering token validation, error messages, and edge cases. |
 
 ## Installation
 

@@ -1,0 +1,118 @@
+/* Title button — positioned absolute inside title wrapper */
+.ltg-btn-inline {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+}
+
+.ltg-btn-inline:active {
+  transform: translateY(-50%) scale(0.92);
+}
+
+/* "Both" button — sits inline with Linear's native header buttons */
+.ltg-btn-native {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+/* Base button style */
+.ltg-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  padding: 0;
+  color: #9d9db0;
+}
+
+/* Title button — purple accent */
+.ltg-btn-title:hover {
+  background: rgba(94, 106, 210, 0.1);
+  border-color: rgba(94, 106, 210, 0.35);
+  color: #8b8ef8;
+  box-shadow: 0 0 8px rgba(94, 106, 210, 0.15);
+}
+
+/* Content button — positioned top-right of description */
+.ltg-btn-content {
+  position: absolute;
+  right: 2px;
+  top: 4px;
+  z-index: 10;
+  border-radius: 50%;
+}
+
+/* Content button — teal accent */
+.ltg-btn-content:hover {
+  background: rgba(45, 212, 191, 0.1);
+  border-color: rgba(45, 212, 191, 0.35);
+  color: #2dd4bf;
+  box-shadow: 0 0 8px rgba(45, 212, 191, 0.15);
+}
+
+/* Both button — gradient accent (purple → teal) */
+.ltg-btn-both:hover {
+  background: rgba(94, 106, 210, 0.08);
+  border-color: rgba(120, 170, 220, 0.35);
+  color: #a0b4f8;
+  box-shadow: 0 0 8px rgba(120, 170, 220, 0.15);
+}
+
+/* Active press */
+.ltg-btn:active {
+  transform: scale(0.92);
+}
+
+.ltg-btn:focus-visible {
+  outline: 2px solid rgba(94, 106, 210, 0.5);
+  outline-offset: 1px;
+}
+
+/* Loading state */
+.ltg-btn.loading {
+  color: #5e6ad2;
+  border-color: rgba(94, 106, 210, 0.25);
+  background: rgba(94, 106, 210, 0.06);
+  pointer-events: none;
+}
+
+.ltg-btn.loading svg {
+  animation: ltg-spin 0.7s linear infinite;
+}
+
+@keyframes ltg-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Success state */
+.ltg-btn.success {
+  color: #3dd68c;
+  border-color: rgba(61, 214, 140, 0.3);
+  background: rgba(61, 214, 140, 0.08);
+  animation: ltg-pop 0.3s ease;
+}
+
+@keyframes ltg-pop {
+  0% { transform: scale(0.8); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+/* Error state */
+.ltg-btn.error {
+  color: #e5484d;
+  border-color: rgba(229, 72, 77, 0.3);
+  background: rgba(229, 72, 77, 0.06);
+}

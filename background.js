@@ -38,6 +38,7 @@ Rules:
 - Include 3-7 acceptance criteria. Cover edge cases, not just happy paths.
 - Be specific about WHAT and WHY, not about HOW to implement.
 - In Problem/Expected Behavior sections, reference screenshots when relevant (e.g. "as shown in Screenshot 1").
+- NEVER include a "Visual Context" section unless the input contains actual images/screenshots. If there are no images, output only Problem, Expected Behavior, and Acceptance Criteria.
 - Match the dominant language of the original description. If the input is mostly English with some non-English terms, write in English (and vice versa).
 - Output ONLY the enhanced description. No meta-commentary, no "Here is the enhanced version".
 
@@ -126,6 +127,7 @@ Rules:
 - Preserve ALL original information in the description.
 - Describe any screenshots/images in text — the AI coding agent may not receive images directly.
 - In Problem/Expected Behavior sections, reference screenshots when relevant (e.g. "as shown in Screenshot 1").
+- NEVER include a "Visual Context" section unless the input contains actual images/screenshots. If there are no images, output only Problem, Expected Behavior, and Acceptance Criteria.
 - Match the dominant language of the original. If the input is mostly English with some non-English terms, write in English (and vice versa).
 - Use the EXACT output format below with the TITLE: prefix and ---CONTENT--- delimiter.
 

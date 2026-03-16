@@ -214,11 +214,21 @@ function showError(btn, originalSvg, message) {
   console.error('[TitleGen] showError:', message);
   btn.classList.remove('loading');
   btn.classList.add('error');
-  btn.title = message;
   btn.innerHTML = originalSvg;
+
+  // Show floating tooltip above the button
+  const tooltip = document.createElement('div');
+  tooltip.className = 'ltg-error-tooltip';
+  tooltip.textContent = message;
+  document.body.appendChild(tooltip);
+
+  const rect = btn.getBoundingClientRect();
+  tooltip.style.left = `${rect.left + rect.width / 2 - tooltip.offsetWidth / 2}px`;
+  tooltip.style.top = `${rect.top - tooltip.offsetHeight - 6}px`;
+
   setTimeout(() => {
     btn.classList.remove('error');
-    btn.title = btn.getAttribute('data-original-title') || 'Enhance with AI';
+    tooltip.remove();
   }, 3000);
 }
 

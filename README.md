@@ -139,6 +139,18 @@ API keys are persisted via `chrome.storage.sync` and travel with your Chrome pro
 | `https://api.anthropic.com/*` | Claude API |
 | `https://api.openai.com/*` | GPT API |
 
+## Getting API Keys
+
+You need an API key from whichever provider you choose:
+
+| Provider | Where to get a key |
+|----------|--------------------|
+| Google Gemini | [Google AI Studio](https://aistudio.google.com/api-keys) |
+| Anthropic Claude | [Claude Platform](https://platform.claude.com/settings/keys) |
+| OpenAI GPT | [OpenAI Platform](https://platform.openai.com/api-keys) |
+
+Once you have a key, click the extension icon in Chrome's toolbar, select your provider from the dropdown, paste your key, and click **Save**. Keys are stored per-provider — you can switch between providers without re-entering them.
+
 ## License
 
 MIT

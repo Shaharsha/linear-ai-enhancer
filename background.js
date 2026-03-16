@@ -478,9 +478,9 @@ async function callClaude(apiKey, systemPrompt, segments, action) {
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: buildMaxTokens(action) + 8000,
+      max_tokens: buildMaxTokens(action) + 12000,
       system: systemPrompt,
-      thinking: { type: 'adaptive' },
+      thinking: { type: 'enabled', budget_tokens: 10000 },
       messages: [{ role: 'user', content }],
     }),
   });

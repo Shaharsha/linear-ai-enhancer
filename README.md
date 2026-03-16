@@ -35,6 +35,8 @@ Open any issue on [linear.app](https://linear.app). Three buttons appear:
 | 🪄 Wand (top-right of description) | Enhance description into structured format |
 | ✨✨ Double sparkle (header row) | Both at once |
 
+The extension reads the current title, description text, and any attached images from the issue and sends them together as context to the LLM.
+
 ## Features
 
 - **Structured output** — Problem → Expected Behavior → Acceptance Criteria → Visual Context

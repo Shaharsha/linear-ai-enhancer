@@ -31,9 +31,9 @@ Open any issue on [linear.app](https://linear.app). Three buttons appear:
 
 | Button | Action |
 |--------|--------|
-| ✦ Sparkle (next to title) | Generate a concise, verb-first title |
-| ✧ Wand (top-right of description) | Enhance description into structured format |
-| ✦✦ Double sparkle (header row) | Both at once |
+| ✨ Sparkle (next to title) | Generate a concise, verb-first title |
+| 🪄 Wand (top-right of description) | Enhance description into structured format |
+| ✨✨ Double sparkle (header row) | Both at once |
 
 ## Features
 

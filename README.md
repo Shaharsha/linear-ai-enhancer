@@ -13,8 +13,8 @@ One-click AI enhancement for [Linear](https://linear.app) issue tickets — turn
 
 | | Before | After |
 |--|--------|-------|
-| **Title** | fix the bug | Fix login redirect loop causing 403 on SSO callback |
-| **Description** | auth is broken when you log in with SSO, sometimes get error | **Problem:** SSO login triggers a redirect loop, returning a 403 on the callback endpoint. Users cannot sign in.<br>**Expected Behavior:** SSO completes in a single redirect and lands on the dashboard.<br>**Acceptance Criteria:** 5 testable conditions covering token validation, error messages, and edge cases. |
+| **Title** | save button doesn't work | Fix save button not persisting changes on settings page |
+| **Description** | clicking save on settings does nothing, no error | **Problem:** Clicking the save button on the settings page does not persist changes. No error message is shown.<br>**Expected Behavior:** Clicking save persists all changes and shows a confirmation message.<br>**Acceptance Criteria:** 5 testable conditions covering validation, loading state, and error handling. |
 
 ## Installation
 

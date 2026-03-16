@@ -8,7 +8,7 @@ Rules:
 - Keep under 80 characters.
 - Be specific: name the affected component, feature, or behavior.
 - If a current title is provided, generate a DIFFERENT, improved version.
-- Match the language of the description (Hebrew input → Hebrew title).
+- Match the dominant language of the description. If the input is mostly English with some non-English terms, write in English (and vice versa).
 - Output ONLY the raw title text. No quotes, no prefix, no explanation.
 
 Examples:
@@ -38,7 +38,7 @@ Rules:
 - Include 3-7 acceptance criteria. Cover edge cases, not just happy paths.
 - Be specific about WHAT and WHY, not about HOW to implement.
 - In Problem/Expected Behavior sections, reference screenshots when relevant (e.g. "as shown in Screenshot 1").
-- Match the language of the original description.
+- Match the dominant language of the original description. If the input is mostly English with some non-English terms, write in English (and vice versa).
 - Output ONLY the enhanced description. No meta-commentary, no "Here is the enhanced version".
 
 Output format — use these exact markdown headers:
@@ -87,7 +87,37 @@ Search handles special characters correctly, returning all matching results rega
 - Search returns correct results for queries containing &, #, @, and % characters
 - Special characters are properly escaped before being sent to the backend
 - Empty result set displays a "no results" message, not an error
-- Search performance is not degraded by special character handling`;
+- Search performance is not degraded by special character handling
+
+Example input: we need to add the option for users to choose between dark and light theme in settings, currently its only light mode
+Example output:
+## Problem
+The application only supports light mode. Users have no way to switch to a dark theme, which affects usability in low-light environments and does not accommodate user preferences.
+
+## Expected Behavior
+A theme toggle in the settings page allows users to switch between light and dark mode. The selected theme persists across sessions.
+
+## Acceptance Criteria
+- Settings page includes a theme selector with "Light" and "Dark" options
+- Selected theme applies immediately without requiring a page reload
+- Theme preference is saved and persists across browser sessions
+- All UI components render correctly in both themes with sufficient contrast
+- Default theme remains "Light" for new users
+
+Example input: when on the טבלת מכרזים view and I type in the search box nothing happens, it doesn't filter
+Example output:
+## Problem
+The search input on the tenders table view (טבלת מכרזים) does not filter the list when text is entered. Users cannot search or narrow down tenders, making it difficult to find specific entries.
+
+## Expected Behavior
+Typing in the search input filters the tenders table in real time, showing only rows that match the search query.
+
+## Acceptance Criteria
+- Typing in the search input filters the tenders list immediately
+- Clearing the search input restores the full list
+- Search supports substring matching, not just exact matches
+- A "no results" message is shown when no tenders match the query
+- Search works in combination with any other active filters`;
 
 const BOTH_PROMPT = `You generate BOTH a concise title AND an enhanced description for software issue tickets. The enhanced description must be self-contained and structured for AI coding agents (Claude Code).
 
@@ -96,7 +126,7 @@ Rules:
 - Preserve ALL original information in the description.
 - Describe any screenshots/images in text — the AI coding agent may not receive images directly.
 - In Problem/Expected Behavior sections, reference screenshots when relevant (e.g. "as shown in Screenshot 1").
-- Match the language of the original.
+- Match the dominant language of the original. If the input is mostly English with some non-English terms, write in English (and vice versa).
 - Use the EXACT output format below with the TITLE: prefix and ---CONTENT--- delimiter.
 
 Output format:
@@ -131,7 +161,41 @@ Large file uploads either complete successfully or show a clear error message wi
 - Files over the size limit show a clear error message stating the maximum allowed size
 - Upload spinner has a timeout (max 30 seconds) after which an error is shown
 - Upload progress is displayed for files that are processing
-- Error state allows the user to retry or choose a different file`;
+- Error state allows the user to retry or choose a different file
+
+Example input: add dark mode option in the settings page
+Example output:
+TITLE: Add dark mode theme toggle to settings page
+---CONTENT---
+## Problem
+The application only supports light mode. Users have no way to switch to a dark theme, which affects usability in low-light environments.
+
+## Expected Behavior
+A theme toggle in the settings page allows users to switch between light and dark mode. The selected theme persists across sessions.
+
+## Acceptance Criteria
+- Settings page includes a theme selector with "Light" and "Dark" options
+- Selected theme applies immediately without page reload
+- Theme preference persists across browser sessions
+- All UI components render correctly in both themes
+- Default theme remains "Light" for new users
+
+Example input: in the דוחות חודשיים page, the export button downloads an empty CSV file instead of the actual report data
+Example output:
+TITLE: Fix monthly reports CSV export downloading empty file
+---CONTENT---
+## Problem
+Clicking the export button on the monthly reports page (דוחות חודשיים) downloads a CSV file with no data. The file contains only headers or is completely empty, despite report data being visible on screen.
+
+## Expected Behavior
+The export button downloads a CSV file containing all the report data currently displayed on the monthly reports page.
+
+## Acceptance Criteria
+- Exported CSV contains all columns visible in the report table
+- Data values in the CSV match what is displayed on screen
+- Export works for reports of any date range
+- File name includes the report month for easy identification
+- Large reports (1000+ rows) export without timeout or truncation`;
 
 // === Message Handling ===
 
@@ -414,9 +478,9 @@ async function callClaude(apiKey, systemPrompt, segments, action) {
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: buildMaxTokens(action) + 12000,
+      max_tokens: buildMaxTokens(action) + 8000,
       system: systemPrompt,
-      thinking: { type: 'enabled', budget_tokens: 10000 },
+      thinking: { type: 'adaptive' },
       messages: [{ role: 'user', content }],
     }),
   });
